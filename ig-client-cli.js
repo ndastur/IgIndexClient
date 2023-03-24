@@ -260,12 +260,8 @@ async function sleep(seconds) {
         if(LOOP > 0) {
           await sleep(LOOP);
         }
-        else {
-          console.log(`loop was ${LOOP}`);
-        }
     } while(LOOP > 0)
 
-    console.info('While exited ...');
-    //return;
+    // Need to use exit, return doesn't seem to work
     process.exit();
 })();
