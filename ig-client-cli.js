@@ -5,7 +5,7 @@ const minimist = require('minimist'),
   axios = require('axios'),
   slack = require('./slack-lib');
 
-const API_KEY = process.env.API_KEY || '';
+const API_KEY = process.env.IG_API_KEY || '';
 
 let useDemo = false;
 let useSlack = false;
