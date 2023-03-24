@@ -18,7 +18,10 @@ var LOOP = 0;
 // Setup keystroke events
 const readline = require('readline');
 readline.emitKeypressEvents(process.stdin);
-process.stdin.setRawMode(true);
+
+if (process.stdin.isTTY) {
+  process.stdin.setRawMode(true);
+}
 
 process.stdin.on('keypress', (str, key) => {
   if (key.ctrl && key.name === 'c') {
