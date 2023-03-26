@@ -182,6 +182,7 @@ function printHelp(scriptName) {
   console.log(' --demo Use the demo gateway')
   console.log(' -f --function [quote|sentiment|market|epic2id|watchlist2ids] The function to exec')
   console.log(' -i --instrument symbol, symbol CSV or watchlist ID')
+  console.log('   Watchlists: "Weekend Markets", "Popular Markets", "Major Commodities", "Major FX", "Major Indices", "Major Shares", "Cryptocurrencies", "Digital 100s"');
   console.log(' -l x --loop=x repeat every x seconds');
   console.log(' -s send to slack');
   console.log(' --webhook Slack webhook URL')
