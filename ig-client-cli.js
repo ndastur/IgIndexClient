@@ -64,6 +64,11 @@ async function Login(username, password, api_key) {
       }
     });
 
+    if(res.status == 403) {
+	console.log('FAILED to login. Not authorised ...');
+	process.exit(-1);
+    }
+
     var json = await res.data;
     //console.log(json);
     console.info(`Logged into: ${json.currentAccountId}`);
