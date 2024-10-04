@@ -1,0 +1,7 @@
+# ./netlify.toml
+
+[functions]
+node_bundler = "esbuild"
+
+[functions."cron_slack_msg"]
+schedule = "* * * * *"
