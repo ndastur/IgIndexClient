@@ -1,184 +1,21 @@
 #!/usr/bin/env node
 
-require('dotenv').config()
-const minimist = require('minimist'),
-  axios = require('axios'),
-  slack = require('./slack-lib');
+import dotenv from 'dotenv';
+dotenv.config()
+import * as IGClient from './ig-client.js';
+import minimist from 'minimist';
+import * as Slack from './slack-lib.js'
 
 const API_KEY = process.env.IG_API_KEY || '';
 
+let isVerbose = false;
 let useDemo = false;
 let useSlack = false;
+let slackWebhook = '';
 let urlEndpoint = '';
 const IG_UN = process.env.IG_UN || '';
 const IG_PW = Buffer.from(process.env.IG_PW || '', 'base64').toString('ascii');
-let LoginTokens = {};
 var LOOP = 0;
-
-// Setup keystroke events
-const readline = require('readline');
-readline.emitKeypressEvents(process.stdin);
-
-if (process.stdin.isTTY) {
-  process.stdin.setRawMode(true);
-}
-
-process.stdin.on('keypress', (str, key) => {
-  if (key.ctrl && key.name === 'c') {
-    process.exit();
-  } else {
-    if(key.name === 'q') {
-      LOOP = 0;
-      process.exit();
-    }
-    if(key.name === 'up') {
-      LOOP++;
-      console.info(`LOOP now set to: ${LOOP} seconds.`);
-      return;
-    }
-    if(key.name === 'down') {
-      LOOP--;
-      console.info(`LOOP now set to: ${LOOP} seconds.`);
-      return;
-    }
-    console.log(`You pressed the "${str}" key`);
-    console.log();
-    console.log(key);
-    console.log();
-  }
-});
-
-// Login to platform
-async function Login(username, password, api_key) {
-  try {
-    const loginData = {
-      "identifier": IG_UN,
-      "password": IG_PW,
-      "encryptedPassword": null
-    };
-    //console.log(loginData);
-
-    var res = await axios.post(urlEndpoint + '/session', loginData, {
-      headers: {
-        "X-IG-API-KEY": API_KEY
-      }
-    });
-
-    if(res.status == 403) {
-	    console.log('FAILED to login. Not authorised ...');
-	    process.exit(-1);
-    }
-
-    var json = await res.data;
-    //console.log(json);
-    console.info(`Logged into: ${json.currentAccountId}`);
-
-    //console.log(res.headers);
-    var tokens = {
-      cst: res.headers.cst,
-      "x-security-token": res.headers['x-security-token']
-    };
-
-    return tokens;
-  }
-  catch(e) {
-    console.error(e);
-  }
-}
-
-async function GetIGRest(path, query) {
-  try {
-    const headers = {
-      "X-IG-API-KEY": API_KEY,
-      "cst": LoginTokens.cst,
-      "x-security-token": LoginTokens['x-security-token']
-    };
-
-    var res = await axios.get(urlEndpoint + `/${path}/` + query, {
-      headers
-    });
-
-    var json = await res.data;
-    //console.log(json);
-    return json;
-  }
-  catch(e) {
-    console.error(e);
-  }
-
-}
-
-async function GetSentiment(symbol) {
-  try {
-    var symbolQuery = (symbol.includes(',')) ? '?marketIds=' + encodeURIComponent(symbol) : symbol;
-    var json = await GetIGRest('clientsentiment', symbolQuery);
-    //console.log(json);
-    return json;
-  }
-  catch(e) {
-    console.error(e);
-  }
-}
-
-// Get Market Detail from EPIC code
-// e.g IX.D.FTSE.DAILY.IP
-async function GetMarketDetailEpic(epic) {
-  try {
-    var symbolQuery = (symbol.includes(',')) ? '?epics=' + encodeURIComponent(epic) : epic;
-    var json = await GetIGRest('markets', symbolQuery);
-    //console.log(json);
-    return json;
-  }
-  catch(e) {
-    console.error(e);
-  }
-}
-
-async function GetMarketIdFromEpic(epic) {
-  try {
-    var symbolQuery = (epic.includes(',')) ? '?epics=' + encodeURIComponent(epic) : epic;
-    var json = await GetIGRest('markets', symbolQuery);
-    if (epic.includes(',')) {
-      var marketIds = json.marketDetails.map(function (element) {
-        return {
-          name: element.instrument.name,
-          epic: element.instrument.epic,
-          marketId: element.instrument.marketId
-        }
-      });
-      console.log(marketIds);
-      return marketIds;
-    }
-    else {
-      var d = {
-        name: element.instrument.name,
-        epic: element.instrument.epic,
-        marketId: element.instrument.marketId
-      }
-      console.log(d);
-      return d;
-    }
-  }
-  catch(e) {
-    console.error(e);
-  }
-}
-
-async function GetMarketIdsFromWatchlist(watchlistId) {
-  try {
-    var watchlistJson = await GetIGRest('watchlists', watchlistId);
-    var epics = watchlistJson.markets.map(function(e){
-      return e.epic;
-    });
-    console.log(epics.join(','));
-
-    var marketIds = await GetMarketIdFromEpic(epics.join(','));
-    console.log(marketIds);
-  }
-  catch(e) {
-    console.error(e);
-  }
-}
 
 function printHelp(scriptName) {
   console.log(`Usage .${scriptName} [options]`)
@@ -189,13 +26,18 @@ function printHelp(scriptName) {
   console.log(' -i --instrument symbol, symbol CSV or watchlist ID')
   console.log('   Watchlists: "Weekend Markets", "Popular Markets", "Major Commodities", "Major FX", "Major Indices", "Major Shares", "Cryptocurrencies", "Digital 100s"');
   console.log(' -l x --loop=x repeat every x seconds');
+  console.log(' --dblocal save to a local file based database');
   console.log(' -s send to slack');
   console.log(' --webhook Slack webhook URL')
-  console.log(' --verbose')
+  console.log(' -v --verbose')
 }
 
 async function sleep(seconds) {
   return new Promise((resolve) =>setTimeout(resolve, seconds * 1000));
+}
+
+function logVerbose(text) {
+  if(isVerbose) console.log(text)
 }
 
 // ASYNC MAIN
@@ -213,15 +55,25 @@ async function sleep(seconds) {
       return;
   }
 
-  urlEndpoint = `https://${(useDemo?'demo-':'')}api.ig.com/gateway/deal`;
-  console.log(`Using URL endpoint: ${urlEndpoint}`);
+  isVerbose = args.v || args.verbose || false;
 
-  LoginTokens = await Login();
+  urlEndpoint = `https://${(useDemo?'demo-':'')}api.ig.com/gateway/deal`;
+  logVerbose(`Using URL endpoint: ${urlEndpoint}`);
+
+  await IGClient.LoginAsync(IG_UN, IG_PW, API_KEY);
 
   const execFunction = args.function || args.f || '';
   const instrumentSymbol = args.instrument || args.i || '';
 
   useSlack = args.s || false;
+  if(useSlack) {
+    slackWebhook = args.webhook || process.env.SLACK_WEBHOOK || '';
+    logVerbose(`Slack webhook set to: ${slackWebhook}`);
+    if(!slackWebhook) {
+      console.log('Set to send things to Slack but no webhook given in cmd line or ENV ...');
+      useSlack = false;
+    }
+  }
 
   if(execFunction === '' || instrumentSymbol === '') {
     console.log('You must specify at least a function and an instrument')
@@ -234,30 +86,36 @@ async function sleep(seconds) {
         case 'quote':
             break;
         case 'sentiment':
-            var data = await GetSentiment(instrumentSymbol);
+            var data = await IGClient.GetSentiment(instrumentSymbol);
             console.log(`Client sentiment ${new Date().toISOString()}`);
             var slackField = '\`\`\`\n';
             data.clientSentiments.forEach(e => {
-              var line = `${e.marketId.padStart(10)}:\t Long:\t${e.longPositionPercentage} \t Short:\t${e.shortPositionPercentage}`;
+              var line = `${e.marketId.padStart(10)}:\t Long: ${e.longPositionPercentage.toString().padStart(3)}  Short: ${e.shortPositionPercentage.toString().padStart(3)}`;
               console.log(line);
-              slackField += `${e.marketId.padStart(10)}: L: ${e.longPositionPercentage.toString().padStart(3)} S:${e.shortPositionPercentage.toString().padStart(3)}\n`;
+              slackField += `${e.marketId.padStart(10)}: L:${e.longPositionPercentage.toString().padStart(3)} S:${e.shortPositionPercentage.toString().padStart(3)}\n`;
             });
             console.log('----------------------------------------------------------\n');
             slackField += '\`\`\`\n';
 
             if(useSlack) {
-              slack.setWebhookUrl(args.webhook);
-              await slack.send(`Client sentiment ${new Date().toISOString()}`,
-                slack.makeFieldBlock('mrkdwn', slackField),
+              Slack.setWebhookUrl(slackWebhook);
+              await Slack.send(`Client sentiment ${new Date().toISOString()}`,
+                Slack.makeFieldBlock('mrkdwn', slackField),
               );
+            }
+
+            if(args.dblocal) {
+              //bdb.insertOne
+              var ts = Date.now();
+
             }
 
             break;
         case 'epic2id':
-          var data = await GetMarketIdFromEpic(instrumentSymbol);
+          var data = await IGClient.GetMarketIdFromEpic(instrumentSymbol);
           break;
         case 'watchlist2ids':
-          var data = await GetMarketIdsFromWatchlist(instrumentSymbol);
+          var data = await IGClient.GetMarketIdsFromWatchlist(instrumentSymbol);
           break;
         default:
           console.log('You must supply a function and instrument ...');
