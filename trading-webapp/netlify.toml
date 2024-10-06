@@ -3,5 +3,6 @@
 [functions]
 node_bundler = "esbuild"
 
-[functions."cron_slack_msg"]
-schedule = "*/10 * * * *"
+# Pause doing on netlify for the moment
+#[functions."cron_slack_msg"]
+#schedule = "*/10 * * * *"
