@@ -45,7 +45,7 @@ export const IGRestRequest = async (path, query = '', method = 'get') => {
   }
 }
 
-export const logout = async () {
+export const logout = async () => {
   await IGRestRequest('/session', '', 'delete');
 };
 
