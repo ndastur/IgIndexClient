@@ -5,7 +5,12 @@ export default async (req) => {
     const { next_run } = await req.json();
     console.log("Received event! Next invocation at:", next_run)
 
-    await SentimentFetch();
+    if(process.env.IG_PAUSE == '1') {
+        console.log("Paused, so skip ...");
+    }
+    else {
+        await SentimentFetch();
+    }
 }
 
 async function SentimentFetch() {
